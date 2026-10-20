@@ -21,7 +21,7 @@ jobs:                                                       # Lista de trabajos 
       - name: Descargar el código                           # Paso 1: traer el repositorio al runner
         uses: actions/checkout@v7                           # Acción oficial de GitHub que clona el repo
       # ---------------------------------------------------- Requisitos 3 y 4: escaneo con salida SARIF
-      - name: Bearer - reporte SARIF                        # Paso 2: escanear y generar el reporte SARIF
+      - name: Escaneo SAST - reporte SARIF                  # Paso 2: escanear y generar el reporte SARIF
         uses: bearer/bearer-action@v2                       # Acción oficial de Bearer: instala el CLI y corre "bearer scan"
         with:                                               # Parámetros que recibe la acción
           path: .                                           # Escanear todo el repositorio desde la raíz
@@ -29,7 +29,7 @@ jobs:                                                       # Lista de trabajos 
           output: ${{ runner.temp }}/bearer-report.sarif    # Guardar fuera del repo para no escanear el propio reporte
           exit-code: 0                                      # Forzar salida 0 aunque haya hallazgos (requisito 6)
       # ---------------------------------------------------- Requisito 5: escaneo con salida HTML
-      - name: Bearer - reporte HTML                         # Paso 3: mismo escaneo, ahora en HTML legible para personas
+      - name: Escaneo SAST - reporte HTML                   # Paso 3: mismo escaneo, ahora en HTML legible para personas
         if: always()                                        # Se ejecuta aunque el paso anterior haya fallado
         uses: bearer/bearer-action@v2                       # Misma acción de Bearer (reutiliza la caché del paso anterior)
         with:                                               # Parámetros que recibe la acción

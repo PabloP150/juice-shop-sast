@@ -1,0 +1,54 @@
+# Pipeline SAST: analiza el código de Juice Shop con Bearer CLI y publica los resultados en GitHub
+name: SAST con Bearer                                       # Nombre del workflow que se muestra en la pestaña Actions
+# ---------------------------------------------------------- Disparadores (requisito 1)
+on:                                                         # Eventos que inician el workflow
+  push:                                                     # 1) Cuando se hace push...
+    branches: [main]                                        #    ...a la rama main
+  pull_request:                                             # 2) Cuando se abre o actualiza un Pull Request...
+    branches: [main]                                        #    ...cuyo destino es main
+  workflow_dispatch:                                        # 3) Ejecución manual con el botón "Run workflow"
+# ---------------------------------------------------------- Permisos mínimos (requisito 2)
+permissions:                                                # Permisos del GITHUB_TOKEN; todo lo no listado queda en "none"
+  contents: read                                            # Solo lectura del código, suficiente para hacer checkout
+  security-events: write                                    # Escritura en Security > Code scanning para subir el SARIF
+# ---------------------------------------------------------- Trabajo de análisis
+jobs:                                                       # Lista de trabajos del pipeline
+  bearer:                                                   # Identificador interno del único job
+    name: Análisis SAST con Bearer                          # Nombre visible del job en la ejecución
+    runs-on: ubuntu-latest                                  # Máquina virtual Linux hospedada por GitHub
+    steps:                                                  # Pasos que se ejecutan en orden dentro del job
+      # ---------------------------------------------------- Requisito 3: descargar el código
+      - name: Descargar el código                           # Paso 1: traer el repositorio al runner
+        uses: actions/checkout@v7                           # Acción oficial de GitHub que clona el repo
+      # ---------------------------------------------------- Requisitos 3 y 4: escaneo con salida SARIF
+      - name: Bearer - reporte SARIF                        # Paso 2: escanear y generar el reporte SARIF
+        uses: bearer/bearer-action@v2                       # Acción oficial de Bearer: instala el CLI y corre "bearer scan"
+        with:                                               # Parámetros que recibe la acción
+          path: .                                           # Escanear todo el repositorio desde la raíz
+          format: sarif                                     # Formato SARIF, el estándar que entiende Code scanning
+          output: ${{ runner.temp }}/bearer-report.sarif    # Guardar fuera del repo para no escanear el propio reporte
+          exit-code: 0                                      # Forzar salida 0 aunque haya hallazgos (requisito 6)
+      # ---------------------------------------------------- Requisito 5: escaneo con salida HTML
+      - name: Bearer - reporte HTML                         # Paso 3: mismo escaneo, ahora en HTML legible para personas
+        if: always()                                        # Se ejecuta aunque el paso anterior haya fallado
+        uses: bearer/bearer-action@v2                       # Misma acción de Bearer (reutiliza la caché del paso anterior)
+        with:                                               # Parámetros que recibe la acción
+          path: .                                           # Escanear todo el repositorio desde la raíz
+          format: html                                      # Formato HTML, igual al reporte del análisis local
+          output: ${{ runner.temp }}/bearer-report.html     # Ruta temporal del runner donde queda el HTML
+          exit-code: 0                                      # Forzar salida 0 para que el job no se marque como fallido
+      # ---------------------------------------------------- Requisitos 4 y 6: publicar en Security > Code scanning
+      - name: Subir SARIF a Code scanning                   # Paso 4: enviar los hallazgos a la pestaña Security
+        if: always()                                        # Subir siempre, aunque Bearer encuentre vulnerabilidades
+        uses: github/codeql-action/upload-sarif@v4          # Acción oficial de GitHub para cargar archivos SARIF
+        with:                                               # Parámetros que recibe la acción
+          sarif_file: ${{ runner.temp }}/bearer-report.sarif  # Archivo SARIF generado en el paso 2
+          category: bearer                                  # Etiqueta que identifica este análisis en Code scanning
+      # ---------------------------------------------------- Requisitos 5 y 6: guardar el HTML como artefacto
+      - name: Guardar reporte HTML como artefacto           # Paso 5: dejar el HTML descargable en la ejecución
+        if: always()                                        # Guardar siempre, aunque haya hallazgos o fallos previos
+        uses: actions/upload-artifact@v7                    # Acción oficial de GitHub para subir artefactos
+        with:                                               # Parámetros que recibe la acción
+          name: bearer-report-html                          # Nombre del artefacto en el resumen de la ejecución
+          path: ${{ runner.temp }}/bearer-report.html       # Archivo HTML generado en el paso 3
+          retention-days: 30                                # Días que GitHub conserva el artefacto antes de borrarlo
